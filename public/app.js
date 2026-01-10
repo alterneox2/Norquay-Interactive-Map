@@ -204,4 +204,4 @@ async function refresh() {
 refresh();
 
 // And refresh every 2 minutes
-setInterval(refresh, 120000);
+setInterval(refresh, 600000);
