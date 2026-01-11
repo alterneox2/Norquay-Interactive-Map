@@ -254,14 +254,33 @@ function injectOverlay(svgDoc) {
   temp.textContent = "--°C";
   g.appendChild(temp);
 
-  const note = svgEl(svgDoc, "text");
-  note.setAttribute("id", "cNote");
-  note.setAttribute("x", "160");
-  note.setAttribute("y", "90");
-  note.setAttribute("font-size", "18");
-  note.setAttribute("fill", "#333");
-  note.textContent = "Loading conditions…";
-  g.appendChild(note);
+  const noteFO = svgDoc.createElementNS(
+  "http://www.w3.org/2000/svg",
+  "foreignObject"
+);
+  noteFO.setAttribute("x", "160");
+  noteFO.setAttribute("y", "28");
+  noteFO.setAttribute("width", "680");
+  noteFO.setAttribute("height", "90");
+
+  const noteDiv = svgDoc.createElement("div");
+  noteDiv.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  noteDiv.setAttribute(
+    "style",
+    `
+    font: 15px system-ui, Segoe UI, Arial;
+    color: #333;
+    line-height: 1.35;
+    max-height: 90px;
+    overflow: hidden;
+  `
+);
+  noteDiv.id = "cNote";
+  noteDiv.textContent = "Loading conditions…";
+
+  noteFO.appendChild(noteDiv);
+  g.appendChild(noteFO);
+
 
   const updated = svgEl(svgDoc, "text");
   updated.setAttribute("id", "cUpdated");

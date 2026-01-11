@@ -1,1 +1,1 @@
-import * as bootstrap from './___netlify-bootstrap.mjs';export const handler = bootstrap.getLambdaHandler('./netlify/functions/norquay-runs.cjs')
+import * as bootstrap from './___netlify-bootstrap.mjs';export const handler = bootstrap.getLambdaHandler('./netlify/functions/norquay-runs.mjs')
