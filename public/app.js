@@ -230,90 +230,205 @@ function svgEl(doc, name) {
 
 function injectOverlay(svgDoc) {
   const svg = svgDoc.querySelector("svg");
-  if (!svg || svgDoc.getElementById("conditionsOverlay")) return;
+  if (!svg) return;
+
+  // Don't inject twice
+  if (svgDoc.getElementById("conditionsOverlay")) return;
 
   const g = svgEl(svgDoc, "g");
   g.setAttribute("id", "conditionsOverlay");
-  g.setAttribute("transform", "translate(520,40)");
+  // Move this if you want it higher/lower/left/right
+  g.setAttribute("transform", "translate(520,30)");
 
+  // Background panel (bigger now to fit tiles)
   const bg = svgEl(svgDoc, "rect");
-  bg.setAttribute("width", "900");
-  bg.setAttribute("height", "140");
+  bg.setAttribute("x", "0");
+  bg.setAttribute("y", "0");
+  bg.setAttribute("width", "1040");
+  bg.setAttribute("height", "180");
   bg.setAttribute("rx", "18");
   bg.setAttribute("fill", "rgba(255,255,255,0.78)");
-  bg.setAttribute("stroke", "rgba(0,0,0,0.2)");
+  bg.setAttribute("stroke", "rgba(0,0,0,0.20)");
   bg.setAttribute("stroke-width", "2");
   g.appendChild(bg);
 
+  // Temp (big)
   const temp = svgEl(svgDoc, "text");
   temp.setAttribute("id", "cTemp");
   temp.setAttribute("x", "24");
-  temp.setAttribute("y", "90");
-  temp.setAttribute("font-size", "60");
+  temp.setAttribute("y", "78");
+  temp.setAttribute("font-size", "64");
   temp.setAttribute("font-weight", "700");
+  temp.setAttribute("font-family", "system-ui, Segoe UI, Arial");
   temp.textContent = "--°C";
   g.appendChild(temp);
 
-  const noteFO = svgDoc.createElementNS(
-  "http://www.w3.org/2000/svg",
-  "foreignObject"
-);
-  noteFO.setAttribute("x", "160");
-  noteFO.setAttribute("y", "28");
-  noteFO.setAttribute("width", "680");
-  noteFO.setAttribute("height", "90");
+  // Weather note label
+  const noteLabel = svgEl(svgDoc, "text");
+  noteLabel.setAttribute("x", "150");
+  noteLabel.setAttribute("y", "40");
+  noteLabel.setAttribute("font-size", "14");
+  noteLabel.setAttribute("font-weight", "700");
+  noteLabel.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  noteLabel.setAttribute("fill", "rgba(0,0,0,0.65)");
+  noteLabel.textContent = "Weather Note";
+  g.appendChild(noteLabel);
+
+  // Weather note wrapped (foreignObject)
+  const noteFO = svgEl(svgDoc, "foreignObject");
+  noteFO.setAttribute("x", "150");
+  noteFO.setAttribute("y", "46");
+  noteFO.setAttribute("width", "420");
+  noteFO.setAttribute("height", "70");
 
   const noteDiv = svgDoc.createElement("div");
   noteDiv.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   noteDiv.setAttribute(
     "style",
-    `
-    font: 15px system-ui, Segoe UI, Arial;
-    color: #333;
-    line-height: 1.35;
-    max-height: 90px;
-    overflow: hidden;
-  `
-);
+    "font: 14px system-ui, Segoe UI, Arial; color: rgba(0,0,0,0.78); line-height: 1.25; max-height:70px; overflow:hidden;"
+  );
   noteDiv.id = "cNote";
-  noteDiv.textContent = "Loading conditions…";
+  noteDiv.textContent = "Loading…";
 
   noteFO.appendChild(noteDiv);
   g.appendChild(noteFO);
 
+  // Divider line
+  const div1 = svgEl(svgDoc, "line");
+  div1.setAttribute("x1", "590");
+  div1.setAttribute("y1", "20");
+  div1.setAttribute("x2", "590");
+  div1.setAttribute("y2", "160");
+  div1.setAttribute("stroke", "rgba(0,0,0,0.15)");
+  div1.setAttribute("stroke-width", "2");
+  g.appendChild(div1);
 
+  // --- NEW SNOW section ---
+  const nsTitle = svgEl(svgDoc, "text");
+  nsTitle.setAttribute("x", "610");
+  nsTitle.setAttribute("y", "40");
+  nsTitle.setAttribute("font-size", "14");
+  nsTitle.setAttribute("font-weight", "700");
+  nsTitle.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  nsTitle.setAttribute("fill", "rgba(0,0,0,0.65)");
+  nsTitle.textContent = "New Snow";
+  g.appendChild(nsTitle);
+
+  // Tile helper
+  function addTile(x, y, w, h, valueId, labelText) {
+    const r = svgEl(svgDoc, "rect");
+    r.setAttribute("x", String(x));
+    r.setAttribute("y", String(y));
+    r.setAttribute("width", String(w));
+    r.setAttribute("height", String(h));
+    r.setAttribute("rx", "12");
+    r.setAttribute("fill", "rgba(255,255,255,0.85)");
+    r.setAttribute("stroke", "rgba(0,0,0,0.15)");
+    r.setAttribute("stroke-width", "2");
+    g.appendChild(r);
+
+    const v = svgEl(svgDoc, "text");
+    v.setAttribute("id", valueId);
+    v.setAttribute("x", String(x + w / 2));
+    v.setAttribute("y", String(y + 32));
+    v.setAttribute("text-anchor", "middle");
+    v.setAttribute("font-size", "22");
+    v.setAttribute("font-weight", "700");
+    v.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+    v.textContent = "--";
+    g.appendChild(v);
+
+    const l = svgEl(svgDoc, "text");
+    l.setAttribute("x", String(x + w / 2));
+    l.setAttribute("y", String(y + 54));
+    l.setAttribute("text-anchor", "middle");
+    l.setAttribute("font-size", "11");
+    l.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+    l.setAttribute("fill", "rgba(0,0,0,0.65)");
+    l.textContent = labelText;
+    g.appendChild(l);
+  }
+
+  addTile(610, 52, 90, 62, "nsOvernight", "Overnight");
+  addTile(712, 52, 90, 62, "ns24", "Last 24h");
+  addTile(814, 52, 90, 62, "ns7", "Last 7d");
+
+  // --- SNOW BASE section ---
+  const sbTitle = svgEl(svgDoc, "text");
+  sbTitle.setAttribute("x", "610");
+  sbTitle.setAttribute("y", "135");
+  sbTitle.setAttribute("font-size", "14");
+  sbTitle.setAttribute("font-weight", "700");
+  sbTitle.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  sbTitle.setAttribute("fill", "rgba(0,0,0,0.65)");
+  sbTitle.textContent = "Snow Base";
+  g.appendChild(sbTitle);
+
+  addTile(610, 146, 90, 62, "sbLower", "Lower");
+  addTile(712, 146, 90, 62, "sbUpper", "Upper");
+  addTile(814, 146, 90, 62, "sbYtd", "YTD Snow");
+
+  // Updated
   const updated = svgEl(svgDoc, "text");
   updated.setAttribute("id", "cUpdated");
   updated.setAttribute("x", "24");
-  updated.setAttribute("y", "125");
+  updated.setAttribute("y", "165");
   updated.setAttribute("font-size", "11");
-  updated.setAttribute("fill", "#666");
+  updated.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  updated.setAttribute("fill", "rgba(0,0,0,0.55)");
+  updated.textContent = "Updated: --";
   g.appendChild(updated);
 
+  // Add overlay LAST so it sits above everything
   svg.appendChild(g);
+}
+
+function fmtCm(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "--";
+  return `${Number(n)}cm`;
 }
 
 async function updateOverlay(svgDoc) {
   try {
-    const res = await fetch(`${CONDITIONS_URL}?t=${Date.now()}`);
+    const res = await fetch(`${CONDITIONS_URL}?t=${Date.now()}`, { cache: "no-store" });
     const d = await res.json();
 
-    svgDoc.getElementById("cTemp").textContent = `${d.tempC ?? "--"}°C`;
+    // Temp + Note
+    const tempC = d.tempC ?? null;
+    svgDoc.getElementById("cTemp").textContent = tempC === null ? "--°C" : `${tempC}°C`;
     svgDoc.getElementById("cNote").textContent = d.note ?? "";
-    svgDoc.getElementById("cUpdated").textContent =
-      "Updated: " + new Date(d.updated).toLocaleString();
 
-  } catch {
-    svgDoc.getElementById("cNote").textContent = "Unable to load conditions";
+    // New Snow
+    svgDoc.getElementById("nsOvernight").textContent = fmtCm(d.newSnow?.overnightCm);
+    svgDoc.getElementById("ns24").textContent = fmtCm(d.newSnow?.last24Cm);
+    svgDoc.getElementById("ns7").textContent = fmtCm(d.newSnow?.last7DaysCm);
+
+    // Snow Base
+    svgDoc.getElementById("sbLower").textContent = fmtCm(d.snowBase?.lowerCm);
+    svgDoc.getElementById("sbUpper").textContent = fmtCm(d.snowBase?.upperCm);
+    svgDoc.getElementById("sbYtd").textContent = fmtCm(d.snowBase?.ytdSnowfallCm);
+
+    // Updated
+    const when = d.updated ? new Date(d.updated) : null;
+    svgDoc.getElementById("cUpdated").textContent =
+      `Updated: ${when ? when.toLocaleString() : "--"}`;
+
+  } catch (e) {
+    // Only change note on failure, keep old values
+    const noteEl = svgDoc.getElementById("cNote");
+    if (noteEl) noteEl.textContent = "Unable to load conditions";
   }
 }
 
+// Wire it up to the <object id="map">
 const map = document.getElementById("map");
-
 map.addEventListener("load", () => {
   const svgDoc = map.contentDocument;
+  if (!svgDoc) return;
+
   injectOverlay(svgDoc);
   updateOverlay(svgDoc);
   setInterval(() => updateOverlay(svgDoc), 10 * 60 * 1000);
 });
+
 
