@@ -174,7 +174,7 @@ function injectOverlay(svgDoc) {
 
   // Layout constants (edit these ONLY if you want to move/resize)
   const PANEL_W = 1020;
-  const PANEL_H = 170;
+  const PANEL_H = 180;
 
   const LEFT_W = 560;          // left side: temp + note
   const PAD = 18;
