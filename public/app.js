@@ -478,5 +478,5 @@ async function refresh() {
 
 refresh();
 
-// Refresh every 10 minutes
-setInterval(refresh, 10 * 60 * 1000);
+// Refresh every 30 minutes
+setInterval(refresh, 30 * 60 * 1000);
