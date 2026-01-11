@@ -222,7 +222,7 @@ setInterval(refresh, 10 * 60 * 1000);
 
 // --- CONDITIONS OVERLAY INJECTOR (for <object data="...svg">) ---
 
-const CONDITIONS_URL = "/conditions.json"; // start with a local JSON file
+const CONDITIONS_URL = "/.netlify/functions/conditions"; // start with a local JSON file
 
 function createSvgEl(doc, name) {
   return doc.createElementNS("http://www.w3.org/2000/svg", name);
