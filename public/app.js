@@ -244,8 +244,8 @@ function injectOverlay(svgDoc) {
   const bg = svgEl(svgDoc, "rect");
   bg.setAttribute("x", "0");
   bg.setAttribute("y", "0");
-  bg.setAttribute("width", "1040");
-  bg.setAttribute("height", "180");
+  bg.setAttribute("width", "1120");
+  bg.setAttribute("height", "190");
   bg.setAttribute("rx", "18");
   bg.setAttribute("fill", "rgba(255,255,255,0.78)");
   bg.setAttribute("stroke", "rgba(0,0,0,0.20)");
@@ -295,9 +295,9 @@ function injectOverlay(svgDoc) {
 
   // Divider line
   const div1 = svgEl(svgDoc, "line");
-  div1.setAttribute("x1", "590");
+  div1.setAttribute("x1", "560");
   div1.setAttribute("y1", "20");
-  div1.setAttribute("x2", "590");
+  div1.setAttribute("x2", "560");
   div1.setAttribute("y2", "160");
   div1.setAttribute("stroke", "rgba(0,0,0,0.15)");
   div1.setAttribute("stroke-width", "2");
@@ -305,7 +305,7 @@ function injectOverlay(svgDoc) {
 
   // --- NEW SNOW section ---
   const nsTitle = svgEl(svgDoc, "text");
-  nsTitle.setAttribute("x", "610");
+  nsTitle.setAttribute("x", "580");
   nsTitle.setAttribute("y", "40");
   nsTitle.setAttribute("font-size", "14");
   nsTitle.setAttribute("font-weight", "700");
@@ -349,13 +349,13 @@ function injectOverlay(svgDoc) {
     g.appendChild(l);
   }
 
-  addTile(610, 52, 90, 62, "nsOvernight", "Overnight");
-  addTile(712, 52, 90, 62, "ns24", "Last 24h");
-  addTile(814, 52, 90, 62, "ns7", "Last 7d");
+  addTile(580, 52, 90, 62, "nsOvernight", "Overnight");
+  addTile(682, 52, 90, 62, "ns24", "Last 24h");
+  addTile(784, 52, 90, 62, "ns7", "Last 7d");
 
   // --- SNOW BASE section ---
   const sbTitle = svgEl(svgDoc, "text");
-  sbTitle.setAttribute("x", "610");
+  sbTitle.setAttribute("x", "580");
   sbTitle.setAttribute("y", "135");
   sbTitle.setAttribute("font-size", "14");
   sbTitle.setAttribute("font-weight", "700");
@@ -364,9 +364,9 @@ function injectOverlay(svgDoc) {
   sbTitle.textContent = "Snow Base";
   g.appendChild(sbTitle);
 
-  addTile(610, 146, 90, 62, "sbLower", "Lower");
-  addTile(712, 146, 90, 62, "sbUpper", "Upper");
-  addTile(814, 146, 90, 62, "sbYtd", "YTD Snow");
+  addTile(580, 146, 90, 62, "sbLower", "Lower");
+  addTile(682, 146, 90, 62, "sbUpper", "Upper");
+  addTile(784, 146, 90, 62, "sbYtd", "YTD Snow");
 
   // Updated
   const updated = svgEl(svgDoc, "text");
