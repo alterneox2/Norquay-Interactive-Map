@@ -222,120 +222,79 @@ setInterval(refresh, 10 * 60 * 1000);
 
 // --- CONDITIONS OVERLAY INJECTOR (for <object data="...svg">) ---
 
-const CONDITIONS_URL = "/.netlify/functions/conditions"; // start with a local JSON file
+const CONDITIONS_URL = "/.netlify/functions/conditions";
 
-function createSvgEl(doc, name) {
+function svgEl(doc, name) {
   return doc.createElementNS("http://www.w3.org/2000/svg", name);
 }
 
-function upsertConditionsOverlay(svgDoc) {
+function injectOverlay(svgDoc) {
   const svg = svgDoc.querySelector("svg");
-  if (!svg) return;
+  if (!svg || svgDoc.getElementById("conditionsOverlay")) return;
 
-  // If we already added it, don't add twice
-  let overlay = svgDoc.getElementById("conditionsOverlay");
-  if (overlay) return overlay;
+  const g = svgEl(svgDoc, "g");
+  g.setAttribute("id", "conditionsOverlay");
+  g.setAttribute("transform", "translate(520,40)");
 
-  overlay = createSvgEl(svgDoc, "g");
-  overlay.setAttribute("id", "conditionsOverlay");
-
-  // Position in the "sky" area (tweak these numbers)
-  overlay.setAttribute("transform", "translate(520,40)");
-
-  // Background panel
-  const bg = createSvgEl(svgDoc, "rect");
-  bg.setAttribute("x", "0");
-  bg.setAttribute("y", "0");
-  bg.setAttribute("width", "860");
-  bg.setAttribute("height", "120");
+  const bg = svgEl(svgDoc, "rect");
+  bg.setAttribute("width", "900");
+  bg.setAttribute("height", "140");
   bg.setAttribute("rx", "18");
   bg.setAttribute("fill", "rgba(255,255,255,0.78)");
-  bg.setAttribute("stroke", "rgba(0,0,0,0.18)");
+  bg.setAttribute("stroke", "rgba(0,0,0,0.2)");
   bg.setAttribute("stroke-width", "2");
-  overlay.appendChild(bg);
+  g.appendChild(bg);
 
-  // Title
-  const title = createSvgEl(svgDoc, "text");
-  title.setAttribute("x", "26");
-  title.setAttribute("y", "40");
-  title.setAttribute("font-size", "22");
-  title.setAttribute("font-weight", "700");
-  title.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  title.textContent = "Conditions";
-  overlay.appendChild(title);
-
-  // Temperature
-  const temp = createSvgEl(svgDoc, "text");
+  const temp = svgEl(svgDoc, "text");
   temp.setAttribute("id", "cTemp");
-  temp.setAttribute("x", "26");
-  temp.setAttribute("y", "98");
-  temp.setAttribute("font-size", "58");
+  temp.setAttribute("x", "24");
+  temp.setAttribute("y", "90");
+  temp.setAttribute("font-size", "60");
   temp.setAttribute("font-weight", "700");
-  temp.setAttribute("font-family", "system-ui, Segoe UI, Arial");
   temp.textContent = "--°C";
-  overlay.appendChild(temp);
+  g.appendChild(temp);
 
-  // Note
-  const note = createSvgEl(svgDoc, "text");
+  const note = svgEl(svgDoc, "text");
   note.setAttribute("id", "cNote");
-  note.setAttribute("x", "170");
-  note.setAttribute("y", "98");
+  note.setAttribute("x", "160");
+  note.setAttribute("y", "90");
   note.setAttribute("font-size", "18");
-  note.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  note.setAttribute("fill", "rgba(0,0,0,0.75)");
-  note.textContent = "Loading…";
-  overlay.appendChild(note);
+  note.setAttribute("fill", "#333");
+  note.textContent = "Loading conditions…";
+  g.appendChild(note);
 
-  // Updated time
-  const updated = createSvgEl(svgDoc, "text");
+  const updated = svgEl(svgDoc, "text");
   updated.setAttribute("id", "cUpdated");
-  updated.setAttribute("x", "26");
-  updated.setAttribute("y", "115");
+  updated.setAttribute("x", "24");
+  updated.setAttribute("y", "125");
   updated.setAttribute("font-size", "11");
-  updated.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  updated.setAttribute("fill", "rgba(0,0,0,0.55)");
-  updated.textContent = "Updated: --";
-  overlay.appendChild(updated);
+  updated.setAttribute("fill", "#666");
+  g.appendChild(updated);
 
-  // IMPORTANT: append LAST so it draws on top of the map
-  svg.appendChild(overlay);
-
-  return overlay;
+  svg.appendChild(g);
 }
 
-function setOverlayText(svgDoc, id, value) {
-  const el = svgDoc.getElementById(id);
-  if (el) el.textContent = value;
-}
-
-async function loadConditionsIntoSvg(svgDoc) {
+async function updateOverlay(svgDoc) {
   try {
-    const res = await fetch(`${CONDITIONS_URL}?t=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error("Bad response");
+    const res = await fetch(`${CONDITIONS_URL}?t=${Date.now()}`);
     const d = await res.json();
 
-    setOverlayText(svgDoc, "cTemp", `${d.tempC ?? "--"}°C`);
-    setOverlayText(svgDoc, "cNote", d.note ?? "");
-    setOverlayText(
-      svgDoc,
-      "cUpdated",
-      `Updated: ${d.updated ? new Date(d.updated).toLocaleString() : "--"}`
-    );
-  } catch (e) {
-    setOverlayText(svgDoc, "cNote", "Unable to load conditions");
+    svgDoc.getElementById("cTemp").textContent = `${d.tempC ?? "--"}°C`;
+    svgDoc.getElementById("cNote").textContent = d.note ?? "";
+    svgDoc.getElementById("cUpdated").textContent =
+      "Updated: " + new Date(d.updated).toLocaleString();
+
+  } catch {
+    svgDoc.getElementById("cNote").textContent = "Unable to load conditions";
   }
 }
 
-// Hook into the <object id="map">
-const mapObject = document.getElementById("map");
+const map = document.getElementById("map");
 
-mapObject.addEventListener("load", () => {
-  const svgDoc = mapObject.contentDocument;
-  if (!svgDoc) return;
-
-  upsertConditionsOverlay(svgDoc);
-  loadConditionsIntoSvg(svgDoc);
-
-  // refresh every 10 minutes
-  setInterval(() => loadConditionsIntoSvg(svgDoc), 10 * 60 * 1000);
+map.addEventListener("load", () => {
+  const svgDoc = map.contentDocument;
+  injectOverlay(svgDoc);
+  updateOverlay(svgDoc);
+  setInterval(() => updateOverlay(svgDoc), 10 * 60 * 1000);
 });
+

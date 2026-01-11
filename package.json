@@ -1,9 +1,7 @@
 {
   "name": "norquay-interactive-map",
   "version": "1.0.0",
-  "private": true
-}
-{
+  "private": true,
   "type": "module",
   "dependencies": {
     "cheerio": "^1.0.0-rc.12"
