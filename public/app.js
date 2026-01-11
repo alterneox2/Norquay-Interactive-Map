@@ -174,7 +174,7 @@ function injectOverlay(svgDoc) {
 
   // Layout constants (edit these ONLY if you want to move/resize)
   const PANEL_W = 1020;
-  const PANEL_H = 180;
+  const PANEL_H = 190;
 
   const LEFT_W = 560;          // left side: temp + note
   const PAD = 18;
@@ -190,7 +190,7 @@ function injectOverlay(svgDoc) {
   const g = svgEl(svgDoc, "g");
   g.setAttribute("id", "conditionsOverlay");
   // Move overlay here (x,y)
-  g.setAttribute("transform", "translate(520,30)");
+  g.setAttribute("transform", "translate(510,30)");
 
   // Defs + clipPath so nothing ever draws outside the panel border
   const defs = svgEl(svgDoc, "defs");
