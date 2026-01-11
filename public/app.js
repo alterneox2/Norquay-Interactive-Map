@@ -152,6 +152,257 @@ async function reloadSvgObject(obj, statusEl) {
   return svgDoc;
 }
 
+// ---------------- CONDITIONS OVERLAY ----------------
+
+const CONDITIONS_URL = "/.netlify/functions/conditions";
+
+function svgEl(doc, name) {
+  return doc.createElementNS("http://www.w3.org/2000/svg", name);
+}
+
+function fmtCm(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "--";
+  return `${Number(n)}cm`;
+}
+
+function injectOverlay(svgDoc) {
+  const svg = svgDoc.querySelector("svg");
+  if (!svg) return;
+
+  // Don't inject twice (within a single loaded SVG)
+  if (svgDoc.getElementById("conditionsOverlay")) return;
+
+  // Layout constants (edit these ONLY if you want to move/resize)
+  const PANEL_W = 1020;
+  const PANEL_H = 170;
+
+  const LEFT_W = 560;          // left side: temp + note
+  const PAD = 18;
+  const DIV_X = LEFT_W + PAD;  // divider position
+
+  const RIGHT_X = DIV_X + 18;  // right side tile area start
+  const RIGHT_W = PANEL_W - RIGHT_X - PAD;
+
+  const TILE_W = 84;
+  const TILE_H = 56;
+  const TILE_GAP = 12;
+
+  const g = svgEl(svgDoc, "g");
+  g.setAttribute("id", "conditionsOverlay");
+  // Move overlay here (x,y)
+  g.setAttribute("transform", "translate(520,30)");
+
+  // Defs + clipPath so nothing ever draws outside the panel border
+  const defs = svgEl(svgDoc, "defs");
+  const clip = svgEl(svgDoc, "clipPath");
+  clip.setAttribute("id", "conditionsClip");
+
+  const clipRect = svgEl(svgDoc, "rect");
+  clipRect.setAttribute("x", "0");
+  clipRect.setAttribute("y", "0");
+  clipRect.setAttribute("width", String(PANEL_W));
+  clipRect.setAttribute("height", String(PANEL_H));
+  clipRect.setAttribute("rx", "18");
+
+  clip.appendChild(clipRect);
+  defs.appendChild(clip);
+  g.appendChild(defs);
+
+  // Main panel border/background
+  const bg = svgEl(svgDoc, "rect");
+  bg.setAttribute("x", "0");
+  bg.setAttribute("y", "0");
+  bg.setAttribute("width", String(PANEL_W));
+  bg.setAttribute("height", String(PANEL_H));
+  bg.setAttribute("rx", "18");
+  bg.setAttribute("fill", "rgba(255,255,255,0.78)");
+  bg.setAttribute("stroke", "rgba(0,0,0,0.20)");
+  bg.setAttribute("stroke-width", "2");
+  g.appendChild(bg);
+
+  // Clip everything inside the rounded border
+  g.setAttribute("clip-path", "url(#conditionsClip)");
+
+  // Divider
+  const div1 = svgEl(svgDoc, "line");
+  div1.setAttribute("x1", String(DIV_X));
+  div1.setAttribute("y1", "14");
+  div1.setAttribute("x2", String(DIV_X));
+  div1.setAttribute("y2", String(PANEL_H - 14));
+  div1.setAttribute("stroke", "rgba(0,0,0,0.15)");
+  div1.setAttribute("stroke-width", "2");
+  g.appendChild(div1);
+
+  // Right-side tiles container (subtle)
+  const tilesBg = svgEl(svgDoc, "rect");
+  tilesBg.setAttribute("x", String(RIGHT_X));
+  tilesBg.setAttribute("y", "14");
+  tilesBg.setAttribute("width", String(RIGHT_W));
+  tilesBg.setAttribute("height", String(PANEL_H - 28));
+  tilesBg.setAttribute("rx", "14");
+  tilesBg.setAttribute("fill", "rgba(255,255,255,0.55)");
+  tilesBg.setAttribute("stroke", "rgba(0,0,0,0.10)");
+  tilesBg.setAttribute("stroke-width", "1.5");
+  g.appendChild(tilesBg);
+
+  // Temp
+  const temp = svgEl(svgDoc, "text");
+  temp.setAttribute("id", "cTemp");
+  temp.setAttribute("x", "24");
+  temp.setAttribute("y", "78");
+  temp.setAttribute("font-size", "64");
+  temp.setAttribute("font-weight", "700");
+  temp.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  temp.textContent = "--°C";
+  g.appendChild(temp);
+
+  // Weather note label
+  const noteLabel = svgEl(svgDoc, "text");
+  noteLabel.setAttribute("x", "150");
+  noteLabel.setAttribute("y", "40");
+  noteLabel.setAttribute("font-size", "14");
+  noteLabel.setAttribute("font-weight", "700");
+  noteLabel.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  noteLabel.setAttribute("fill", "rgba(0,0,0,0.65)");
+  noteLabel.textContent = "Weather Note";
+  g.appendChild(noteLabel);
+
+  // Weather note wrapped (foreignObject)
+  const noteFO = svgEl(svgDoc, "foreignObject");
+  noteFO.setAttribute("x", "150");
+  noteFO.setAttribute("y", "46");
+  noteFO.setAttribute("width", String(LEFT_W - 150)); // fits left area neatly
+  noteFO.setAttribute("height", "78");
+
+  const noteDiv = svgDoc.createElement("div");
+  noteDiv.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  noteDiv.setAttribute(
+    "style",
+    "font: 14px system-ui, Segoe UI, Arial; color: rgba(0,0,0,0.78); line-height: 1.25; max-height:78px; overflow:hidden;"
+  );
+  noteDiv.id = "cNote";
+  noteDiv.textContent = "Loading…";
+
+  noteFO.appendChild(noteDiv);
+  g.appendChild(noteFO);
+
+  // Tile helper
+  function addTile(x, y, w, h, valueId, labelText) {
+    const r = svgEl(svgDoc, "rect");
+    r.setAttribute("x", String(x));
+    r.setAttribute("y", String(y));
+    r.setAttribute("width", String(w));
+    r.setAttribute("height", String(h));
+    r.setAttribute("rx", "12");
+    r.setAttribute("fill", "rgba(255,255,255,0.85)");
+    r.setAttribute("stroke", "rgba(0,0,0,0.15)");
+    r.setAttribute("stroke-width", "2");
+    g.appendChild(r);
+
+    const v = svgEl(svgDoc, "text");
+    v.setAttribute("id", valueId);
+    v.setAttribute("x", String(x + w / 2));
+    v.setAttribute("y", String(y + 32));
+    v.setAttribute("text-anchor", "middle");
+    v.setAttribute("font-size", "20");
+    v.setAttribute("font-weight", "700");
+    v.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+    v.textContent = "--";
+    g.appendChild(v);
+
+    const l = svgEl(svgDoc, "text");
+    l.setAttribute("x", String(x + w / 2));
+    l.setAttribute("y", String(y + 52));
+    l.setAttribute("text-anchor", "middle");
+    l.setAttribute("font-size", "10.5");
+    l.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+    l.setAttribute("fill", "rgba(0,0,0,0.65)");
+    l.textContent = labelText;
+    g.appendChild(l);
+  }
+
+  // Titles (right area)
+  const nsTitle = svgEl(svgDoc, "text");
+  nsTitle.setAttribute("x", String(RIGHT_X + 12));
+  nsTitle.setAttribute("y", "34");
+  nsTitle.setAttribute("font-size", "14");
+  nsTitle.setAttribute("font-weight", "700");
+  nsTitle.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  nsTitle.setAttribute("fill", "rgba(0,0,0,0.65)");
+  nsTitle.textContent = "New Snow";
+  g.appendChild(nsTitle);
+
+  const sbTitle = svgEl(svgDoc, "text");
+  sbTitle.setAttribute("x", String(RIGHT_X + 12));
+  sbTitle.setAttribute("y", "118");
+  sbTitle.setAttribute("font-size", "14");
+  sbTitle.setAttribute("font-weight", "700");
+  sbTitle.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  sbTitle.setAttribute("fill", "rgba(0,0,0,0.65)");
+  sbTitle.textContent = "Snow Base";
+  g.appendChild(sbTitle);
+
+  // New Snow row
+  const t0x = RIGHT_X + 12;
+  const row1y = 40;
+  addTile(t0x + (TILE_W + TILE_GAP) * 0, row1y, TILE_W, TILE_H, "nsOvernight", "Overnight");
+  addTile(t0x + (TILE_W + TILE_GAP) * 1, row1y, TILE_W, TILE_H, "ns24", "Last 24h");
+  addTile(t0x + (TILE_W + TILE_GAP) * 2, row1y, TILE_W, TILE_H, "ns7", "Last 7d");
+
+  // Snow Base row
+  const row2y = 124;
+  addTile(t0x + (TILE_W + TILE_GAP) * 0, row2y, TILE_W, TILE_H, "sbLower", "Lower");
+  addTile(t0x + (TILE_W + TILE_GAP) * 1, row2y, TILE_W, TILE_H, "sbUpper", "Upper");
+  addTile(t0x + (TILE_W + TILE_GAP) * 2, row2y, TILE_W, TILE_H, "sbYtd", "YTD Snow");
+
+  // Updated text
+  const updated = svgEl(svgDoc, "text");
+  updated.setAttribute("id", "cUpdated");
+  updated.setAttribute("x", "24");
+  updated.setAttribute("y", String(PANEL_H - 12));
+  updated.setAttribute("font-size", "11");
+  updated.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+  updated.setAttribute("fill", "rgba(0,0,0,0.55)");
+  updated.textContent = "Updated: --";
+  g.appendChild(updated);
+
+  // Add overlay LAST so it sits above everything
+  svg.appendChild(g);
+}
+
+function updateOverlayFromData(svgDoc, d) {
+  if (!d) return;
+
+  const tempC = d.tempC ?? null;
+  const note = (d.note ?? "").toString();
+  const when = d.updated ? new Date(d.updated) : null;
+
+  const tempEl = svgDoc.getElementById("cTemp");
+  if (tempEl) tempEl.textContent = (tempC === null) ? "--°C" : `${tempC}°C`;
+
+  const noteEl = svgDoc.getElementById("cNote");
+  if (noteEl) noteEl.textContent = note.length > 260 ? (note.slice(0, 260) + "…") : note;
+
+  const nsO = svgDoc.getElementById("nsOvernight");
+  const ns24 = svgDoc.getElementById("ns24");
+  const ns7 = svgDoc.getElementById("ns7");
+  if (nsO) nsO.textContent = fmtCm(d.newSnow?.overnightCm);
+  if (ns24) ns24.textContent = fmtCm(d.newSnow?.last24Cm);
+  if (ns7) ns7.textContent = fmtCm(d.newSnow?.last7DaysCm);
+
+  const sbL = svgDoc.getElementById("sbLower");
+  const sbU = svgDoc.getElementById("sbUpper");
+  const sbY = svgDoc.getElementById("sbYtd");
+  if (sbL) sbL.textContent = fmtCm(d.snowBase?.lowerCm);
+  if (sbU) sbU.textContent = fmtCm(d.snowBase?.upperCm);
+  if (sbY) sbY.textContent = fmtCm(d.snowBase?.ytdSnowfallCm);
+
+  const upEl = svgDoc.getElementById("cUpdated");
+  if (upEl) upEl.textContent = `Updated: ${when ? when.toLocaleString() : "--"}`;
+}
+
+// ---------------- MAIN REFRESH ----------------
+
 async function refresh() {
   const statusEl = document.getElementById("status");
   const obj = document.getElementById("map");
@@ -162,10 +413,20 @@ async function refresh() {
     const svgDoc = await reloadSvgObject(obj, statusEl);
     ensureSvgStyles(svgDoc);
 
-    statusEl.textContent = "Fetching run status…";
-    const live = await loadJSON("/.netlify/functions/norquay-runs", 20000);
+    // Inject overlay immediately (so layout is always present)
+    injectOverlay(svgDoc);
 
-    const runMapRaw = await loadJSON("/runMap.json", 8000).catch(() => ({}));
+    statusEl.textContent = "Fetching run status + conditions…";
+
+    const runMapRawPromise = loadJSON("/runMap.json", 8000).catch(() => ({}));
+    const livePromise = loadJSON("/.netlify/functions/norquay-runs", 20000);
+    const condPromise = loadJSON(CONDITIONS_URL, 15000).catch(() => null);
+
+    const [runMapRaw, live, cond] = await Promise.all([runMapRawPromise, livePromise, condPromise]);
+
+    // Update conditions overlay (if we got data)
+    if (cond) updateOverlayFromData(svgDoc, cond);
+
     const runMap = {};
     for (const [k, v] of Object.entries(runMapRaw || {})) {
       runMap[norm(k)] = (v ?? "").toString().trim();
@@ -219,216 +480,3 @@ refresh();
 
 // Refresh every 10 minutes
 setInterval(refresh, 10 * 60 * 1000);
-
-// --- CONDITIONS OVERLAY INJECTOR (for <object data="...svg">) ---
-
-const CONDITIONS_URL = "/.netlify/functions/conditions";
-
-function svgEl(doc, name) {
-  return doc.createElementNS("http://www.w3.org/2000/svg", name);
-}
-
-function injectOverlay(svgDoc) {
-  const svg = svgDoc.querySelector("svg");
-  if (!svg) return;
-
-  // Don't inject twice
-  if (svgDoc.getElementById("conditionsOverlay")) return;
-
-  const g = svgEl(svgDoc, "g");
-  g.setAttribute("id", "conditionsOverlay");
-  // Move this if you want it higher/lower/left/right
-  g.setAttribute("transform", "translate(520,30)");
-
-  // Background panel (bigger now to fit tiles)
-  const bg = svgEl(svgDoc, "rect");
-  bg.setAttribute("x", "0");
-  bg.setAttribute("y", "0");
-  bg.setAttribute("width", "1120");
-  bg.setAttribute("height", "190");
-  bg.setAttribute("rx", "18");
-  bg.setAttribute("fill", "rgba(255,255,255,0.78)");
-  bg.setAttribute("stroke", "rgba(0,0,0,0.20)");
-  bg.setAttribute("stroke-width", "2");
-  g.appendChild(bg);
-
-  // Temp (big)
-  const temp = svgEl(svgDoc, "text");
-  temp.setAttribute("id", "cTemp");
-  temp.setAttribute("x", "24");
-  temp.setAttribute("y", "78");
-  temp.setAttribute("font-size", "64");
-  temp.setAttribute("font-weight", "700");
-  temp.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  temp.textContent = "--°C";
-  g.appendChild(temp);
-
-  // Weather note label
-  const noteLabel = svgEl(svgDoc, "text");
-  noteLabel.setAttribute("x", "150");
-  noteLabel.setAttribute("y", "40");
-  noteLabel.setAttribute("font-size", "14");
-  noteLabel.setAttribute("font-weight", "700");
-  noteLabel.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  noteLabel.setAttribute("fill", "rgba(0,0,0,0.65)");
-  noteLabel.textContent = "Weather Note";
-  g.appendChild(noteLabel);
-
-  // Weather note wrapped (foreignObject)
-  const noteFO = svgEl(svgDoc, "foreignObject");
-  noteFO.setAttribute("x", "150");
-  noteFO.setAttribute("y", "46");
-  noteFO.setAttribute("width", "420");
-  noteFO.setAttribute("height", "70");
-
-  const noteDiv = svgDoc.createElement("div");
-  noteDiv.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-  noteDiv.setAttribute(
-    "style",
-    "font: 14px system-ui, Segoe UI, Arial; color: rgba(0,0,0,0.78); line-height: 1.25; max-height:70px; overflow:hidden;"
-  );
-  noteDiv.id = "cNote";
-  noteDiv.textContent = "Loading…";
-
-  noteFO.appendChild(noteDiv);
-  g.appendChild(noteFO);
-
-  // Divider line
-  const div1 = svgEl(svgDoc, "line");
-  div1.setAttribute("x1", "560");
-  div1.setAttribute("y1", "20");
-  div1.setAttribute("x2", "560");
-  div1.setAttribute("y2", "160");
-  div1.setAttribute("stroke", "rgba(0,0,0,0.15)");
-  div1.setAttribute("stroke-width", "2");
-  g.appendChild(div1);
-
-  // --- NEW SNOW section ---
-  const nsTitle = svgEl(svgDoc, "text");
-  nsTitle.setAttribute("x", "580");
-  nsTitle.setAttribute("y", "40");
-  nsTitle.setAttribute("font-size", "14");
-  nsTitle.setAttribute("font-weight", "700");
-  nsTitle.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  nsTitle.setAttribute("fill", "rgba(0,0,0,0.65)");
-  nsTitle.textContent = "New Snow";
-  g.appendChild(nsTitle);
-
-  // Tile helper
-  function addTile(x, y, w, h, valueId, labelText) {
-    const r = svgEl(svgDoc, "rect");
-    r.setAttribute("x", String(x));
-    r.setAttribute("y", String(y));
-    r.setAttribute("width", String(w));
-    r.setAttribute("height", String(h));
-    r.setAttribute("rx", "12");
-    r.setAttribute("fill", "rgba(255,255,255,0.85)");
-    r.setAttribute("stroke", "rgba(0,0,0,0.15)");
-    r.setAttribute("stroke-width", "2");
-    g.appendChild(r);
-
-    const v = svgEl(svgDoc, "text");
-    v.setAttribute("id", valueId);
-    v.setAttribute("x", String(x + w / 2));
-    v.setAttribute("y", String(y + 32));
-    v.setAttribute("text-anchor", "middle");
-    v.setAttribute("font-size", "22");
-    v.setAttribute("font-weight", "700");
-    v.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-    v.textContent = "--";
-    g.appendChild(v);
-
-    const l = svgEl(svgDoc, "text");
-    l.setAttribute("x", String(x + w / 2));
-    l.setAttribute("y", String(y + 54));
-    l.setAttribute("text-anchor", "middle");
-    l.setAttribute("font-size", "11");
-    l.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-    l.setAttribute("fill", "rgba(0,0,0,0.65)");
-    l.textContent = labelText;
-    g.appendChild(l);
-  }
-
-  addTile(580, 52, 90, 62, "nsOvernight", "Overnight");
-  addTile(682, 52, 90, 62, "ns24", "Last 24h");
-  addTile(784, 52, 90, 62, "ns7", "Last 7d");
-
-  // --- SNOW BASE section ---
-  const sbTitle = svgEl(svgDoc, "text");
-  sbTitle.setAttribute("x", "580");
-  sbTitle.setAttribute("y", "135");
-  sbTitle.setAttribute("font-size", "14");
-  sbTitle.setAttribute("font-weight", "700");
-  sbTitle.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  sbTitle.setAttribute("fill", "rgba(0,0,0,0.65)");
-  sbTitle.textContent = "Snow Base";
-  g.appendChild(sbTitle);
-
-  addTile(580, 146, 90, 62, "sbLower", "Lower");
-  addTile(682, 146, 90, 62, "sbUpper", "Upper");
-  addTile(784, 146, 90, 62, "sbYtd", "YTD Snow");
-
-  // Updated
-  const updated = svgEl(svgDoc, "text");
-  updated.setAttribute("id", "cUpdated");
-  updated.setAttribute("x", "24");
-  updated.setAttribute("y", "165");
-  updated.setAttribute("font-size", "11");
-  updated.setAttribute("font-family", "system-ui, Segoe UI, Arial");
-  updated.setAttribute("fill", "rgba(0,0,0,0.55)");
-  updated.textContent = "Updated: --";
-  g.appendChild(updated);
-
-  // Add overlay LAST so it sits above everything
-  svg.appendChild(g);
-}
-
-function fmtCm(n) {
-  if (n === null || n === undefined || Number.isNaN(Number(n))) return "--";
-  return `${Number(n)}cm`;
-}
-
-async function updateOverlay(svgDoc) {
-  try {
-    const res = await fetch(`${CONDITIONS_URL}?t=${Date.now()}`, { cache: "no-store" });
-    const d = await res.json();
-
-    // Temp + Note
-    const tempC = d.tempC ?? null;
-    svgDoc.getElementById("cTemp").textContent = tempC === null ? "--°C" : `${tempC}°C`;
-    svgDoc.getElementById("cNote").textContent = d.note ?? "";
-
-    // New Snow
-    svgDoc.getElementById("nsOvernight").textContent = fmtCm(d.newSnow?.overnightCm);
-    svgDoc.getElementById("ns24").textContent = fmtCm(d.newSnow?.last24Cm);
-    svgDoc.getElementById("ns7").textContent = fmtCm(d.newSnow?.last7DaysCm);
-
-    // Snow Base
-    svgDoc.getElementById("sbLower").textContent = fmtCm(d.snowBase?.lowerCm);
-    svgDoc.getElementById("sbUpper").textContent = fmtCm(d.snowBase?.upperCm);
-    svgDoc.getElementById("sbYtd").textContent = fmtCm(d.snowBase?.ytdSnowfallCm);
-
-    // Updated
-    const when = d.updated ? new Date(d.updated) : null;
-    svgDoc.getElementById("cUpdated").textContent =
-      `Updated: ${when ? when.toLocaleString() : "--"}`;
-
-  } catch (e) {
-    // Only change note on failure, keep old values
-    const noteEl = svgDoc.getElementById("cNote");
-    if (noteEl) noteEl.textContent = "Unable to load conditions";
-  }
-}
-
-// Wire it up to the <object id="map">
-const map = document.getElementById("map");
-map.addEventListener("load", () => {
-  const svgDoc = map.contentDocument;
-  if (!svgDoc) return;
-
-  injectOverlay(svgDoc);
-  updateOverlay(svgDoc);
-  setInterval(() => updateOverlay(svgDoc), 10 * 60 * 1000);
-});
-
-
