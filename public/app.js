@@ -35,15 +35,10 @@ function ensureSvgStyles(svgDoc) {
   const style = svgDoc.createElementNS("http://www.w3.org/2000/svg", "style");
   style.setAttribute("id", "run-status-styles");
 
-  // NOTE: We DO NOT set opacity for closed anymore.
-  // Closed = red stroke. Open = original. Unknown = slightly dim.
-  // Groom icons default hidden (you can create elements like id="groom-valley-of-10")
+  // Hide groom icons by default; JS turns them on when groomed.
   style.textContent = `
-    .run-open {}
-    .run-closed {}
     .run-unknown { opacity: 0.65 !important; }
-
-    [id^="groom-"] { display: none; }
+    [id^="grm-"] { display: none; }
   `;
 
   (svgDoc.documentElement || svgDoc.querySelector("svg")).appendChild(style);
@@ -62,15 +57,13 @@ function clearPrevious(svgDoc) {
     el.classList.remove("run-open", "run-closed", "run-unknown");
   });
 
-  // Do NOT wipe styles globally; we only touch styles on elements we modify.
-  // Also hide all groom markers each refresh:
-  svgDoc.querySelectorAll('[id^="groom-"]').forEach(el => {
+  // Hide all groom markers each refresh; we re-enable groomed ones after.
+  svgDoc.querySelectorAll('[id^="grm-"]').forEach(el => {
     el.style.display = "none";
   });
 }
 
 function rememberOriginal(target) {
-  // preserve original inline style only once
   if (target.dataset.origStroke === undefined) {
     const attrStroke = target.getAttribute("stroke");
     const inlineStroke = target.style.stroke;
@@ -84,14 +77,12 @@ function rememberOriginal(target) {
 }
 
 function restoreOriginal(target) {
-  // Stroke
   if (target.dataset.origStroke && target.dataset.origStroke !== "null") {
     target.style.stroke = target.dataset.origStroke;
   } else {
     target.style.removeProperty("stroke");
   }
 
-  // Fill: only restore if we previously changed it
   if (target.dataset.origFill && target.dataset.origFill !== "null") {
     target.style.fill = target.dataset.origFill;
   } else {
@@ -109,32 +100,27 @@ function applyState(el, status) {
 
   rememberOriginal(target);
 
-  // Normalize status
   const safe = (status === "open" || status === "closed") ? status : "unknown";
-
   target.classList.remove("run-open", "run-closed", "run-unknown");
   target.classList.add(`run-${safe}`);
 
   if (safe === "closed") {
-    // CLOSED: red stroke, keep visible
+    // CLOSED = RED
     target.style.stroke = "red";
-
-    // Only force fill red if the element is normally filled (not "none")
-    // Many ski lines are strokes only; forcing fill can hide things.
-    const origFill = (target.dataset.origFill || "").toLowerCase();
-    const hasFillAttr = target.hasAttribute("fill") || target.style.fill;
-    if (hasFillAttr && origFill && origFill !== "none") {
-      target.style.fill = "red";
-    }
-
-    // Ensure full visibility
     target.style.opacity = "1";
     target.style.strokeOpacity = "1";
+
+    // Only set fill red if it was filled originally (some objects are shapes)
+    const origFill = (target.dataset.origFill || "").toLowerCase();
+    const hasFill = target.hasAttribute("fill") || target.style.fill;
+    if (hasFill && origFill && origFill !== "none") {
+      target.style.fill = "red";
+    }
   } else if (safe === "open") {
-    // OPEN: restore original stroke/fill
+    // OPEN = restore original styling (do not force anything)
     restoreOriginal(target);
   } else {
-    // UNKNOWN: slightly dim, but keep original colors
+    // UNKNOWN = restore then dim slightly
     restoreOriginal(target);
     target.style.opacity = "0.65";
   }
@@ -143,25 +129,21 @@ function applyState(el, status) {
 }
 
 function setGroomMarker(svgDoc, runId, groomed) {
-  // Your SVG marker IDs should be like: groom-valley-of-10
-  const marker = svgDoc.getElementById(`groom-${runId}`);
+  // Your SVG marker IDs should be like: grm-valley-of-10
+  const marker = svgDoc.getElementById(`grm-${runId}`);
   if (!marker) return;
   marker.style.display = groomed ? "inline" : "none";
 }
 
-// Force the <object> to reload the SVG each time (beats caching)
 async function reloadSvgObject(obj, statusEl) {
   const base = "/norquay-map.svg";
-  const bust = `?v=${Date.now()}`;
-  const url = base + bust;
+  const url = `${base}?v=${Date.now()}`;
 
   statusEl.textContent = "Reloading SVG…";
   obj.setAttribute("data", url);
 
   const svgDoc = await withTimeout(
-    new Promise(resolve =>
-      obj.addEventListener("load", () => resolve(obj.contentDocument), { once: true })
-    ),
+    new Promise(resolve => obj.addEventListener("load", () => resolve(obj.contentDocument), { once: true })),
     12000,
     "SVG load"
   );
@@ -177,14 +159,12 @@ async function refresh() {
   try {
     statusEl.textContent = "Starting…";
 
-    // Always reload SVG on refresh so we apply to a known, fresh DOM
     const svgDoc = await reloadSvgObject(obj, statusEl);
     ensureSvgStyles(svgDoc);
 
     statusEl.textContent = "Fetching run status…";
     const live = await loadJSON("/.netlify/functions/norquay-runs", 20000);
 
-    // Optional mapping overrides: {"Norquay Gully":"norquay-gully"} etc.
     const runMapRaw = await loadJSON("/runMap.json", 8000).catch(() => ({}));
     const runMap = {};
     for (const [k, v] of Object.entries(runMapRaw || {})) {
@@ -197,14 +177,12 @@ async function refresh() {
     let notFound = 0;
 
     for (const [runName, data] of Object.entries(live.runs || {})) {
-      // data is now: { status: "open"|"closed", groomed: boolean }
       const status = data?.status;
       const groomed = !!data?.groomed;
 
       const key = norm(runName);
       const mapped = runMap[key];
 
-      // Candidate IDs to try
       const candidates = [
         mapped || null,
         mapped ? idify(mapped) : null,
@@ -221,32 +199,22 @@ async function refresh() {
         if (found) { el = found; usedId = c; break; }
       }
 
-      if (!el) {
-        notFound++;
-        continue;
-      }
+      if (!el) { notFound++; continue; }
 
-      // Apply open/closed coloring
       if (applyState(el, status)) applied++;
       else notFound++;
 
-      // Toggle groom marker (if you created one in SVG)
       if (usedId) setGroomMarker(svgDoc, usedId, groomed);
     }
 
-    // Example debug run:
-    const wiegeles = live.runs?.["Wiegele's"];
-    const wiegelesStatus = typeof wiegeles === "object" ? wiegeles.status : wiegeles;
-
     statusEl.textContent =
-      `Updated: ${new Date(live.updatedAt).toLocaleString()} — Applied: ${applied} — Not found: ${notFound} — Wiegele's: ${wiegelesStatus ?? "missing"}`;
+      `Updated: ${new Date(live.updatedAt).toLocaleString()} — Applied: ${applied} — Not found: ${notFound}`;
 
   } catch (err) {
     statusEl.textContent = `ERROR: ${err.message || err}`;
   }
 }
 
-// Run once on page load
 refresh();
 
 // Refresh every 10 minutes
