@@ -34,23 +34,18 @@ function ensureSvgStyles(svgDoc) {
 
   const style = svgDoc.createElementNS("http://www.w3.org/2000/svg", "style");
   style.setAttribute("id", "run-status-styles");
+
+  // NOTE: We DO NOT set opacity for closed anymore.
+  // Closed = red stroke. Open = original. Unknown = slightly dim.
+  // Groom icons default hidden (you can create elements like id="groom-valley-of-10")
   style.textContent = `
-    .open {
-      opacity: 1 !important;
-      stroke-opacity: 1 !important;
-    }
+    .run-open {}
+    .run-closed {}
+    .run-unknown { opacity: 0.65 !important; }
 
-   .closed {
-     stroke: red !important;
-     opacity: 1 !important;
-     stroke-opacity: 1 !important;
-    }
-
-   .unknown {
-     opacity: 0.6 !important;
-     stroke-opacity: 0.6 !important;
-    }
+    [id^="groom-"] { display: none; }
   `;
+
   (svgDoc.documentElement || svgDoc.querySelector("svg")).appendChild(style);
 }
 
@@ -63,58 +58,95 @@ function getDrawableTarget(el) {
 }
 
 function clearPrevious(svgDoc) {
-  svgDoc.querySelectorAll(".open, .closed, .unknown").forEach(el => {
-    el.classList.remove("open", "closed", "unknown");
-    el.style.opacity = "";
-    el.style.strokeOpacity = "";
-    el.style.fillOpacity = "";
-    el.style.display = "";
+  svgDoc.querySelectorAll(".run-open, .run-closed, .run-unknown").forEach(el => {
+    el.classList.remove("run-open", "run-closed", "run-unknown");
+  });
+
+  // Do NOT wipe styles globally; we only touch styles on elements we modify.
+  // Also hide all groom markers each refresh:
+  svgDoc.querySelectorAll('[id^="groom-"]').forEach(el => {
+    el.style.display = "none";
   });
 }
 
-function applyState(el, state) {
+function rememberOriginal(target) {
+  // preserve original inline style only once
+  if (target.dataset.origStroke === undefined) {
+    const attrStroke = target.getAttribute("stroke");
+    const inlineStroke = target.style.stroke;
+    target.dataset.origStroke = attrStroke ?? inlineStroke ?? "";
+  }
+  if (target.dataset.origFill === undefined) {
+    const attrFill = target.getAttribute("fill");
+    const inlineFill = target.style.fill;
+    target.dataset.origFill = attrFill ?? inlineFill ?? "";
+  }
+}
+
+function restoreOriginal(target) {
+  // Stroke
+  if (target.dataset.origStroke && target.dataset.origStroke !== "null") {
+    target.style.stroke = target.dataset.origStroke;
+  } else {
+    target.style.removeProperty("stroke");
+  }
+
+  // Fill: only restore if we previously changed it
+  if (target.dataset.origFill && target.dataset.origFill !== "null") {
+    target.style.fill = target.dataset.origFill;
+  } else {
+    target.style.removeProperty("fill");
+  }
+
+  target.style.removeProperty("opacity");
+  target.style.removeProperty("stroke-opacity");
+  target.style.removeProperty("fill-opacity");
+}
+
+function applyState(el, status) {
   const target = getDrawableTarget(el);
   if (!target) return false;
 
-  const safe = state === "open" || state === "closed" ? state : "unknown";
+  rememberOriginal(target);
 
-  // Always keep it visible (don't use display:none anymore)
-  target.style.display = "";
+  // Normalize status
+  const safe = (status === "open" || status === "closed") ? status : "unknown";
 
-  // Preserve original styling ONCE (first time we touch this element)
-  if (!target.dataset.origStroke) {
-    // Prefer attribute first, then computed style
-    const attrStroke = target.getAttribute("stroke");
-    const cssStroke = target.style.stroke;
-    target.dataset.origStroke = attrStroke || cssStroke || "";
-  }
-
-  if (!target.dataset.origFill) {
-    const attrFill = target.getAttribute("fill");
-    const cssFill = target.style.fill;
-    target.dataset.origFill = attrFill || cssFill || "";
-  }
-
-  // Mark state class (optional, for your own debugging)
-  target.classList.remove("open", "closed", "unknown");
-  target.classList.add(safe);
+  target.classList.remove("run-open", "run-closed", "run-unknown");
+  target.classList.add(`run-${safe}`);
 
   if (safe === "closed") {
-    // ✅ CLOSED: set red override, but do NOT touch opacity or other properties
+    // CLOSED: red stroke, keep visible
     target.style.stroke = "red";
-    // If the run is a filled shape instead of a stroked line, also force fill red
-    // (harmless if fill is "none")
-    target.style.fill = target.dataset.origFill === "none" ? "none" : "red";
-  } else {
-    // ✅ OPEN/UNKNOWN: restore original stroke/fill (remove our override)
-    if (target.dataset.origStroke) target.style.stroke = target.dataset.origStroke;
-    else target.style.removeProperty("stroke");
 
-    if (target.dataset.origFill) target.style.fill = target.dataset.origFill;
-    else target.style.removeProperty("fill");
+    // Only force fill red if the element is normally filled (not "none")
+    // Many ski lines are strokes only; forcing fill can hide things.
+    const origFill = (target.dataset.origFill || "").toLowerCase();
+    const hasFillAttr = target.hasAttribute("fill") || target.style.fill;
+    if (hasFillAttr && origFill && origFill !== "none") {
+      target.style.fill = "red";
+    }
+
+    // Ensure full visibility
+    target.style.opacity = "1";
+    target.style.strokeOpacity = "1";
+  } else if (safe === "open") {
+    // OPEN: restore original stroke/fill
+    restoreOriginal(target);
+  } else {
+    // UNKNOWN: slightly dim, but keep original colors
+    restoreOriginal(target);
+    target.style.opacity = "0.65";
   }
 
   return true;
+}
+
+function setGroomMarker(svgDoc, runId, groomed) {
+  // Your SVG marker IDs should be like: groom-valley-of-10
+  const marker = svgDoc.getElementById(`groom-${runId}`);
+  if (!marker) return;
+  marker.style.display = groomed ? "inline" : "none";
 }
 
 // Force the <object> to reload the SVG each time (beats caching)
@@ -127,7 +159,9 @@ async function reloadSvgObject(obj, statusEl) {
   obj.setAttribute("data", url);
 
   const svgDoc = await withTimeout(
-    new Promise(resolve => obj.addEventListener("load", () => resolve(obj.contentDocument), { once: true })),
+    new Promise(resolve =>
+      obj.addEventListener("load", () => resolve(obj.contentDocument), { once: true })
+    ),
     12000,
     "SVG load"
   );
@@ -150,7 +184,7 @@ async function refresh() {
     statusEl.textContent = "Fetching run status…";
     const live = await loadJSON("/.netlify/functions/norquay-runs", 20000);
 
-    // Optional mapping overrides
+    // Optional mapping overrides: {"Norquay Gully":"norquay-gully"} etc.
     const runMapRaw = await loadJSON("/runMap.json", 8000).catch(() => ({}));
     const runMap = {};
     for (const [k, v] of Object.entries(runMapRaw || {})) {
@@ -162,7 +196,11 @@ async function refresh() {
     let applied = 0;
     let notFound = 0;
 
-    for (const [runName, state] of Object.entries(live.runs || {})) {
+    for (const [runName, data] of Object.entries(live.runs || {})) {
+      // data is now: { status: "open"|"closed", groomed: boolean }
+      const status = data?.status;
+      const groomed = !!data?.groomed;
+
       const key = norm(runName);
       const mapped = runMap[key];
 
@@ -176,9 +214,11 @@ async function refresh() {
       ].filter(Boolean);
 
       let el = null;
+      let usedId = null;
+
       for (const c of candidates) {
         const found = svgDoc.getElementById(c);
-        if (found) { el = found; break; }
+        if (found) { el = found; usedId = c; break; }
       }
 
       if (!el) {
@@ -186,14 +226,20 @@ async function refresh() {
         continue;
       }
 
-      if (applyState(el, state)) applied++;
+      // Apply open/closed coloring
+      if (applyState(el, status)) applied++;
       else notFound++;
+
+      // Toggle groom marker (if you created one in SVG)
+      if (usedId) setGroomMarker(svgDoc, usedId, groomed);
     }
 
-    // Show Valley status explicitly so you can confirm
+    // Example debug run:
     const wiegeles = live.runs?.["Wiegele's"];
+    const wiegelesStatus = typeof wiegeles === "object" ? wiegeles.status : wiegeles;
+
     statusEl.textContent =
-      `Updated: ${new Date(live.updatedAt).toLocaleString()} — Applied: ${applied} — Not found: ${notFound} — Wiegele's: ${wiegeles ?? "missing"}`;
+      `Updated: ${new Date(live.updatedAt).toLocaleString()} — Applied: ${applied} — Not found: ${notFound} — Wiegele's: ${wiegelesStatus ?? "missing"}`;
 
   } catch (err) {
     statusEl.textContent = `ERROR: ${err.message || err}`;
@@ -203,5 +249,5 @@ async function refresh() {
 // Run once on page load
 refresh();
 
-// And refresh every 2 minutes
-setInterval(refresh, 600000);
+// Refresh every 10 minutes
+setInterval(refresh, 10 * 60 * 1000);

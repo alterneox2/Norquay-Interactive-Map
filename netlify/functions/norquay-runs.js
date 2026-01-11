@@ -33,6 +33,10 @@ export default async (req, context) => {
       const isClosed = /close-icon/.test(row);
 
       if (!isOpen && !isClosed) continue;
+	  
+	  const isGroomed =
+        /icons-snow-plow-truck\.svg/i.test(row) ||
+        /snow-plow-truck/i.test(row);
 
       // Trail name is typically in the trail_name cell
       // e.g. <td class="trail_name"> ... <div>Valley of 10</div> ...
@@ -43,8 +47,11 @@ export default async (req, context) => {
       if (!nameMatch) continue;
 
       const name = nameMatch[1].trim();
-      runs[name] = isOpen ? "open" : "closed";
-    }
+	   
+	  runs[name] = {
+		 status: isOpen ? "open" : "closed",
+		 groomed: isGroomed
+    };
 
     return new Response(
       JSON.stringify({
