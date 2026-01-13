@@ -1,7 +1,7 @@
 export default async () => {
   try {
-    // This endpoint is what the site uses internally
-    const res = await fetch(
+    // --- Part 1: Get conditions content (WP JSON) ---
+    const wpRes = await fetch(
       "https://banffnorquay.com/wp-json/wp/v2/pages?slug=conditions",
       {
         headers: {
@@ -11,24 +11,22 @@ export default async () => {
       }
     );
 
-    if (!res.ok) {
-      throw new Error("Failed to fetch WP JSON");
-    }
+    if (!wpRes.ok) throw new Error("Failed to fetch WP JSON");
 
-    const pages = await res.json();
+    const pages = await wpRes.json();
     if (!pages.length) throw new Error("No page data");
 
-    const content = pages[0].content.rendered;
+    const contentHtml = pages[0].content?.rendered || "";
 
-    // Strip HTML to text
-    const text = content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    // Strip HTML to text (for temp/snow parsing)
+    const text = contentHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
     // ---- CURRENT TEMP ----
     const tempMatch = text.match(/Current Temp\s*(-?\d+)\s*°\s*C/i);
     const tempC = tempMatch ? Number(tempMatch[1]) : null;
 
     // ---- WEATHER NOTE ----
-    const noteMatch = text.match(/Weather Note:\s*(.*?)(New Snow|Snow Base)/i);
+    const noteMatch = text.match(/Weather Note:\s*(.*?)(New Snow|Snow Base|Lift Status)/i);
     const note = noteMatch ? noteMatch[1].trim() : null;
 
     // ---- NEW SNOW ----
@@ -43,9 +41,61 @@ export default async () => {
     const ytdMatches = [...text.matchAll(/(\d+)\s*cm\s*Year to Date Snowfall/gi)]
       .map(m => Number(m[1]));
 
+    // --- Part 2: Get Lift Status from the live conditions page (HTML) ---
+    const url = "https://banffnorquay.com/winter/conditions/";
+    const pageRes = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Netlify Function)" }
+    });
+
+    if (!pageRes.ok) {
+      throw new Error(`Failed to fetch conditions page HTML: ${pageRes.status} ${pageRes.statusText}`);
+    }
+
+    const html = await pageRes.text();
+
+    // We'll scan all table rows and pick out the lift ones.
+    // This uses the same "open-icon"/"close-icon" pattern as your runs scraper.
+    const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+
+    // Only lifts we care about (use the same names you’ll map in app.js)
+    const KNOWN_LIFTS = new Set([
+      "North American Chair",
+      "Cascade Lift",
+      "Spirit Chair",
+      "Mystic Chair",
+      "Sundance Carpet",
+      "Rundle Conveyor",
+      "Tube Park Carpet"
+    ]);
+
+    const lifts = {};
+
+    for (const row of rows) {
+      const isOpen = /open-icon/i.test(row);
+      const isClosed = /close-icon/i.test(row);
+      if (!isOpen && !isClosed) continue;
+
+      // Try a few likely cell class names (site markup can vary)
+      const nameMatch =
+        row.match(/class="lift_name"[\s\S]*?<div[^>]*>([^<]+)<\/div>/i) ||
+        row.match(/class="lift_name"[\s\S]*?>([^<]+)<\/td>/i) ||
+        row.match(/class="trail_name"[\s\S]*?<div[^>]*>([^<]+)<\/div>/i) ||
+        row.match(/class="trail_name"[\s\S]*?>([^<]+)<\/td>/i) ||
+        row.match(/<td[^>]*>\s*([^<]{2,60})\s*<\/td>/i);
+
+      if (!nameMatch) continue;
+
+      const name = nameMatch[1].trim();
+
+      // Only store known lifts
+      if (!KNOWN_LIFTS.has(name)) continue;
+
+      lifts[name] = isOpen ? "open" : "closed";
+    }
+
     return new Response(
       JSON.stringify({
-        source: "banffnorquay.com (WP JSON)",
+        source: "banffnorquay.com (WP JSON + /winter/conditions/ HTML)",
         tempC,
         note,
         newSnow: {
@@ -56,9 +106,9 @@ export default async () => {
         snowBase: {
           lowerCm: lowerMatch ? Number(lowerMatch[1]) : null,
           upperCm: upperMatch ? Number(upperMatch[1]) : null,
-          ytdSnowfallCm: ytdMatches[0] ?? null,
-          ytdSnowfall2Cm: ytdMatches[1] ?? null
+          ytdSnowfallCm: ytdMatches[0] ?? null
         },
+        lifts, // <---- NEW
         updated: new Date().toISOString()
       }),
       {

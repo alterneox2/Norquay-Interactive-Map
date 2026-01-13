@@ -62,6 +62,81 @@ function clearPrevious(svgDoc) {
     el.style.display = "none";
   });
 }
+// ---------------- LIFT BADGES (A–G) ----------------
+// These IDs are from your norquay-map.svg (red ellipse behind each letter).
+const LIFT_BADGE_ELLIPSE_ID_BY_LETTER = {
+  A: "north-american-liftletter",
+  B: "cascade-liftletter",
+  C: "spirit-liftletter",
+  D: "mystic-liftletter",
+  E: "sundance-liftletter",
+  F: "rundle-liftletter",
+  G: "tube-park-liftletter"
+};
+
+// Map lift names (from the conditions page) -> letter
+const LIFT_NAME_TO_LETTER = {
+  "north american chair": "A",
+  "cascade lift": "B",
+  "spirit chair": "C",
+  "mystic chair": "D",
+  "sundance carpet": "E",
+  "rundle conveyor": "F",
+  "tube park carpet": "G"
+};
+
+function setLiftBadge(svgDoc, letter, isOpen) {
+  const ellipseId = LIFT_BADGE_ELLIPSE_ID_BY_LETTER[letter];
+  if (!ellipseId) return;
+
+  const ellipse = svgDoc.getElementById(ellipseId);
+  if (!ellipse) return;
+
+  // The letter itself is a path in the SVG with aria-label="A".."G"
+  const letterPath = svgDoc.querySelector(`path[aria-label="${letter}"]`);
+
+  const fill = isOpen ? "#10b981" : "#ef4444"; // green / red
+  ellipse.style.fill = fill;
+  ellipse.style.fillOpacity = "0.95";
+
+  // Keep the white ring
+  ellipse.style.stroke = "#ffffff";
+  ellipse.style.strokeOpacity = "1";
+
+  // Ensure letter stays readable
+  if (letterPath) {
+    letterPath.style.fill = "#ffffff";
+    letterPath.style.fillOpacity = "1";
+  }
+}
+
+function applyLiftBadgesFromConditions(svgDoc, cond) {
+  const lifts = cond?.lifts;
+  if (!lifts || typeof lifts !== "object") return;
+
+  // Normalize keys once
+  const normLifts = {};
+  for (const [k, v] of Object.entries(lifts)) {
+    normLifts[norm(k)] = v;
+  }
+
+  for (const [liftName, letter] of Object.entries(LIFT_NAME_TO_LETTER)) {
+    const raw = normLifts[liftName];
+    const s = (raw ?? "").toString().toLowerCase().trim();
+
+    // Accept several backend formats:
+    // "open"/"closed", true/false, {status:"open"}, etc.
+    const isOpen =
+      raw === true ||
+      s === "open" ||
+      s === "running" ||
+      s === "1" ||
+      s === "yes" ||
+      (typeof raw === "object" && (raw.status === "open" || raw.open === true));
+
+    setLiftBadge(svgDoc, letter, isOpen);
+  }
+}
 
 function rememberOriginal(target) {
   if (target.dataset.origStroke === undefined) {
@@ -436,7 +511,10 @@ async function refresh() {
     const [runMapRaw, live, cond] = await Promise.all([runMapRawPromise, livePromise, condPromise]);
 
     // Update conditions overlay (if we got data)
-    if (cond) updateOverlayFromData(svgDoc, cond);
+    if (cond) {
+      updateOverlayFromData(svgDoc, cond);
+      applyLiftBadgesFromConditions(svgDoc, cond);
+    }
 
     const runMap = {};
     for (const [k, v] of Object.entries(runMapRaw || {})) {
