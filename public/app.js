@@ -260,7 +260,7 @@ function injectOverlay(svgDoc) {
   const temp = svgEl(svgDoc, "text");
   temp.setAttribute("id", "cTemp");
   temp.setAttribute("x", "24");
-  temp.setAttribute("y", "78");
+  temp.setAttribute("y", "92");
   temp.setAttribute("font-size", "64");
   temp.setAttribute("font-weight", "700");
   temp.setAttribute("font-family", "system-ui, Segoe UI, Arial");
@@ -270,7 +270,7 @@ function injectOverlay(svgDoc) {
   // Weather note label
   const noteLabel = svgEl(svgDoc, "text");
   noteLabel.setAttribute("x", "150");
-  noteLabel.setAttribute("y", "40");
+  noteLabel.setAttribute("y", "54");
   noteLabel.setAttribute("font-size", "14");
   noteLabel.setAttribute("font-weight", "700");
   noteLabel.setAttribute("font-family", "system-ui, Segoe UI, Arial");
@@ -281,7 +281,7 @@ function injectOverlay(svgDoc) {
   // Weather note wrapped (foreignObject)
   const noteFO = svgEl(svgDoc, "foreignObject");
   noteFO.setAttribute("x", "150");
-  noteFO.setAttribute("y", "46");
+  noteFO.setAttribute("y", "60");
   noteFO.setAttribute("width", String(LEFT_W - 150)); // fits left area neatly
   noteFO.setAttribute("height", "78");
 
