@@ -219,7 +219,18 @@ function injectOverlay(svgDoc) {
   bg.setAttribute("stroke", "rgba(0,0,0,0.20)");
   bg.setAttribute("stroke-width", "2");
   g.appendChild(bg);
-
+  
+ // Title inside Conditions panel
+ const title = svgEl(svgDoc, "text");
+ title.setAttribute("x", "24");
+ title.setAttribute("y", "32");
+ title.setAttribute("font-size", "18");
+ title.setAttribute("font-weight", "800");
+ title.setAttribute("font-family", "system-ui, Segoe UI, Arial");
+ title.setAttribute("fill", "rgba(0,0,0,0.85)");
+ title.textContent = "Norquay Live Run Status";
+ g.appendChild(title);
+ 
   // Clip everything inside the rounded border
   g.setAttribute("clip-path", "url(#conditionsClip)");
 
