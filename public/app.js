@@ -85,6 +85,28 @@ const LIFT_NAME_TO_LETTER = {
   "tube park carpet": "G"
 };
 
+// Lift line PATH ids in norquay-map.svg
+const LIFT_PATH_ID_BY_LETTER = {
+  A: "north-american-lift",
+  B: "cascade-lift",
+  C: "spirit-lift",
+  D: "mystic-lift",
+  E: "sundance-lift",
+  F: "rundle-lift",
+  G: "tube-park-lift"
+};
+
+function setLiftPathRunning(svgDoc, letter, isOpen) {
+  const pathId = LIFT_PATH_ID_BY_LETTER[letter];
+  if (!pathId) return;
+
+  const p = svgDoc.getElementById(pathId);
+  if (!p) return;
+
+  p.classList.toggle("lift-running", !!isOpen);
+  p.classList.toggle("lift-stopped", !isOpen);
+}
+
 function setLiftBadge(svgDoc, letter, isOpen) {
   const ellipseId = LIFT_BADGE_ELLIPSE_ID_BY_LETTER[letter];
   if (!ellipseId) return;
