@@ -187,6 +187,7 @@ function applyLiftBadgesFromConditions(svgDoc, cond) {
       (typeof raw === "object" && (raw.status === "open" || raw.open === true));
 
     setLiftBadge(svgDoc, letter, isOpen);
+	setLiftPathRunning(svgDoc, letter, isOpen);
 	
   }
 }
