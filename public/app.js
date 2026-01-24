@@ -391,7 +391,7 @@ function injectOverlay(svgDoc) {
   temp.setAttribute("x", "24");
   temp.setAttribute("y", "92");
   temp.setAttribute("font-size", "40");
-  temp.setAttribute("font-weight", "600");
+  temp.setAttribute("font-weight", "650");
   temp.setAttribute("font-family", "system-ui, Segoe UI, Arial");
   temp.textContent = "--°C";
   g.appendChild(temp);
