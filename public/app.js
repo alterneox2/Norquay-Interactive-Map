@@ -37,9 +37,39 @@ function ensureSvgStyles(svgDoc) {
 
   // Hide groom icons by default; JS turns them on when groomed.
   style.textContent = `
-    .run-unknown { opacity: 0.65 !important; }
-    [id^="grm-"] { display: none; }
-  `;
+	.run-unknown { opacity: 0.65 !important; }
+	[id^="grm-"] { display: none; }
+
+	/* --- LIFT RUNNING ANIMATION (low bandwidth, CSS-only) --- */
+	@keyframes liftDotsMove { to { stroke-dashoffset: -18; } }
+
+	/* When running: show a dashed stroke that "moves" */
+	.lift-running {
+		fill: none !important;
+		stroke: rgba(16,185,129,0.95) !important;
+		stroke-width: 6 !important;
+		stroke-linecap: round !important;
+		stroke-dasharray: 1 16 !important;   /* dot + gap */
+		stroke-dashoffset: 0;
+		animation: liftDotsMove 1.1s linear infinite;
+	}
+
+	/* When stopped: solid red stroke, no animation */
+	.lift-stopped {
+		fill: none !important;
+		stroke: rgba(239,68,68,0.95) !important;
+		stroke-width: 6 !important;
+		stroke-linecap: round !important;
+		stroke-dasharray: none !important;
+		animation: none !important;
+	}
+
+	/* Respect reduced-motion on phones */
+	@media (prefers-reduced-motion: reduce) {
+		.lift-running { animation: none !important; stroke-dasharray: none !important; }
+	}
+`;
+
 
   (svgDoc.documentElement || svgDoc.querySelector("svg")).appendChild(style);
 }
@@ -157,6 +187,7 @@ function applyLiftBadgesFromConditions(svgDoc, cond) {
       (typeof raw === "object" && (raw.status === "open" || raw.open === true));
 
     setLiftBadge(svgDoc, letter, isOpen);
+	
   }
 }
 
