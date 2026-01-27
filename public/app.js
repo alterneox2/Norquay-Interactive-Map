@@ -66,7 +66,7 @@ function ensureSvgStyles(svgDoc) {
 
 	/* Respect reduced-motion on phones */
 	@media (prefers-reduced-motion: reduce) {
-		.lift-running { animation: none !important; } /* keep dasharray so it stays dotted */
+		.lift-running { animation: liftDotsMove 1.1s linear infinite !important; stroke-dasharray: 1 16 !important; }
 	}
 `;
 
